@@ -1,0 +1,6 @@
+#!/bin/bash
+
+clear
+clear
+
+cc -o main main.c stringTree.c SYSTAT.c SYSTAT_RAMINFO.c SYSTAT_CPUINFO.c -lpthread
