@@ -3,16 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-FILE * MEMINFO;
-
-static void cat(FILE *fp)
-{
-    char   buffer[4096];
-    size_t nbytes;
-    while ((nbytes = fread(buffer, sizeof(char), sizeof(buffer), fp)) != 0)
-         fwrite(buffer, sizeof(char), nbytes, stdout);
-}
+#include <pthread.h>
 
 void ramInfoIntialise(){
 
@@ -78,33 +69,23 @@ void ramInfoIntialise(){
 
 }
 
-unsigned int lineCount (FILE * file){
-	unsigned int lineCount = 0;
-	char ch = 0;
-
-	do{
-		ch = fgetc(file);
-		if(ch == '\n'){
-			lineCount++;
-		}
-	}while(ch != EOF);
-
-	if (ch != '\n' && lineCount){
-		lineCount++;
-	}
-
-	return lineCount;
-}
-
-void determineValue (char * name, unsigned long long val, struct SYSTAT_SYSTEM * sys){
+void determineValueRAM (char * name, unsigned long long val, struct SYSTAT_MEMINFO * sys){
 	int i = 0;
 
 	sNode*  p = getHead();
 
-	void (*funcMask) (struct SYSTAT_SYSTEM *, unsigned long long);
+	void (*funcMask) (struct SYSTAT_MEMINFO *, unsigned long long);
 
+
+	/*
+	 * About this traversal
+	 * p is assigned NULL in the loop to prevent the wrong function being called
+	 * This can happen when two words are similar except for their last letter,
+	 * and the null is not assigned the wrong function can occur
+	 * Future proofing
+	 */
 	while(name[i] != ':'){
-		fflush(stdout);
+
 		if(p->links[name[i]] == NULL){
 			p=p->links[name[i]];
 			break;
@@ -115,7 +96,7 @@ void determineValue (char * name, unsigned long long val, struct SYSTAT_SYSTEM *
 		i++;
 	}
 
-	if(p->func == NULL){
+	if(p->func == NULL || p == NULL){
 		return;
 	}
 
@@ -125,9 +106,11 @@ void determineValue (char * name, unsigned long long val, struct SYSTAT_SYSTEM *
 	return;
 }
 
-void ramInfoUpdate(struct SYSTAT_SYSTEM * sys){
+void ramInfoUpdate(struct SYSTAT_MEMINFO * sys){
+
+	FILE * MEMINFO;
+
 	MEMINFO = fopen("/proc/meminfo", "r");
-	printf("\nRAM\n");
 
 	char name [64];
 	char excess [16];
@@ -136,7 +119,7 @@ void ramInfoUpdate(struct SYSTAT_SYSTEM * sys){
 
 	while(args = fscanf(MEMINFO, "%s %llu %s\n", name, &val, excess)){
 		if(args == 3){
-			determineValue(name, val, sys);
+			determineValueRAM(name, val, sys);
 		}
 		if(args == -1){
 			break;
@@ -149,197 +132,203 @@ void ramInfoUpdate(struct SYSTAT_SYSTEM * sys){
 	fclose(MEMINFO);
 
 	return;
+
 }
 
-void update_MemTotal       (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_MemTotal = val;
+void ramInfoUpdateThread(struct SYSTAT_MEMINFO * sys){
+	ramInfoUpdate(sys);
+	pthread_exit(NULL);
+}
+
+void update_MemTotal       (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->MemTotal = val;
 	return;
 }
-void update_MemFree        (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_MemFree = val;
+void update_MemFree        (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->MemFree = val;
 	return;
 }
-void update_MemAvailable   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_MemAvailable = val;
+void update_MemAvailable   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->MemAvailable = val;
 	return;
 }
-void update_Buffers        (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Buffers = val;
+void update_Buffers        (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Buffers = val;
 	return;
 }
-void update_Cached         (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Cached = val;
+void update_Cached         (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Cached = val;
 	return;
 }
-void update_SwapCached     (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_SwapCached= val;
+void update_SwapCached     (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->SwapCached= val;
 	return;
 }
-void update_Active         (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Active = val;
+void update_Active         (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Active = val;
 	return;
 }
-void update_Inactive       (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Inactive = val;
+void update_Inactive       (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Inactive = val;
 	return;
 }
-void update_Active_anon   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Active_anon = val;
+void update_Active_anon   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Active_anon = val;
 	return;
 }
-void update_Inactive_anon (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Inactive_anon = val;
+void update_Inactive_anon (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Inactive_anon = val;
 	return;
 }
-void update_Active_file   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Active_file = val;
+void update_Active_file   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Active_file = val;
 	return;
 }
-void update_Inactive_file (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Inactive_file= val;
+void update_Inactive_file (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Inactive_file= val;
 	return;
 }
-void update_Unevictable    (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Unevictable = val;
+void update_Unevictable    (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Unevictable = val;
 	return;
 }
-void update_Mlocked        (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Mlocked = val;
+void update_Mlocked        (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Mlocked = val;
 	return;
 }
-void update_HighTotal      (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_HighTotal = val;
+void update_HighTotal      (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->HighTotal = val;
 	return;
 }
-void update_HighFree       (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_HighFree = val;
+void update_HighFree       (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->HighFree = val;
 	return;
 }
-void update_LowTotal       (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_LowTotal = val;
+void update_LowTotal       (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->LowTotal = val;
 	return;
 }
-void update_LowFree        (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_LowFree = val;
+void update_LowFree        (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->LowFree = val;
 	return;
 }
-void update_SwapTotal      (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_SwapTotal = val;
+void update_SwapTotal      (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->SwapTotal = val;
 	return;
 }
-void update_SwapFree       (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_SwapFree = val;
+void update_SwapFree       (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->SwapFree = val;
 	return;
 }
-void update_Dirty          (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Dirty = val;
+void update_Dirty          (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Dirty = val;
 	return;
 }
-void update_Writeback      (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Writeback = val;
+void update_Writeback      (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Writeback = val;
 	return;
 }
-void update_AnonPages      (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_AnonPages = val;
+void update_AnonPages      (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->AnonPages = val;
 	return;
 }
-void update_Mapped         (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Mapped = val;
+void update_Mapped         (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Mapped = val;
 	return;
 }
-void update_Shmem          (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Shmem = val;
+void update_Shmem          (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Shmem = val;
 	return;
 }
-void update_Slab           (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Slab = val;
+void update_Slab           (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Slab = val;
 	return;
 }
-void update_SReclaimable   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_SReclaimable = val;
+void update_SReclaimable   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->SReclaimable = val;
 	return;
 }
-void update_SUnreclaim     (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_SUnreclaim = val;
+void update_SUnreclaim     (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->SUnreclaim = val;
 	return;
 }
-void update_KernelStack    (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_KernelStack = val;
+void update_KernelStack    (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->KernelStack = val;
 	return;
 }
-void update_PageTables     (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_PageTables = val;
+void update_PageTables     (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->PageTables = val;
 	return;
 }
-void update_NFS_Unstable   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_NFS_Unstable = val;
+void update_NFS_Unstable   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->NFS_Unstable = val;
 	return;
 }
-void update_Bounce         (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Bounce = val;
+void update_Bounce         (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Bounce = val;
 	return;
 }
-void update_WritebackTmp   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_WritebackTmp = val;
+void update_WritebackTmp   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->WritebackTmp = val;
 	return;
 }
-void update_CommitLimit    (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_CommitLimit = val;
+void update_CommitLimit    (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->CommitLimit = val;
 	return;
 }
-void update_Committed_AS   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Committed_AS = val;
+void update_Committed_AS   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Committed_AS = val;
 	return;
 }
-void update_VmallocTotal   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_VmallocTotal = val;
+void update_VmallocTotal   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->VmallocTotal = val;
 	return;
 }
-void update_VmallocUsed    (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_VmallocUsed = val;
+void update_VmallocUsed    (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->VmallocUsed = val;
 	return;
 }
-void update_VmallocChunk   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_VmallocChunk = val;
+void update_VmallocChunk   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->VmallocChunk = val;
 	return;
 }
-void update_AnonHugePages  (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_AnonHugePages = val;
+void update_AnonHugePages  (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->AnonHugePages = val;
 	return;
 }
-void update_CmaTotal       (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_CmaTotal = val;
+void update_CmaTotal       (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->CmaTotal = val;
 	return;
 }
-void update_CmaFree        (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_CmaFree = val;
+void update_CmaFree        (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->CmaFree = val;
 	return;
 }
-void update_HugePages_Total(struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_HugePages_Total = val;
+void update_HugePages_Total(struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->HugePages_Total = val;
 	return;
 }
-void update_HugePages_Free (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_HugePages_Free = val;
+void update_HugePages_Free (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->HugePages_Free = val;
 	return;
 }
-void update_HugePages_Rsvd (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_HugePages_Rsvd= val;
+void update_HugePages_Rsvd (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->HugePages_Rsvd= val;
 	return;
 }
-void update_HugePages_Surp (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_HugePages_Surp = val;
+void update_HugePages_Surp (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->HugePages_Surp = val;
 	return;
 }
-void update_Hugepagesize   (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_Hugepagesize = val;
+void update_Hugepagesize   (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->Hugepagesize = val;
 	return;
 }
-void update_DirectMap4k    (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_DirectMap4k = val;
+void update_DirectMap4k    (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->DirectMap4k = val;
 	return;
 }
-void update_DirectMap2M    (struct SYSTAT_SYSTEM * sys, unsigned long long val){
-	sys->MEM_INFO_DirectMap2M = val;
+void update_DirectMap2M    (struct SYSTAT_MEMINFO * sys, unsigned long long val){
+	sys->DirectMap2M = val;
 	return;
 }

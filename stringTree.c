@@ -16,6 +16,9 @@ void newStringPack (stringPack * stringPack, char * string, void * p, unsigned i
 	stringPack->length = length;
 }
 
+/*
+ * Apparently you cant just zero memory for pointers as NULL does not always point to 0
+ */
 sNode* newSNode (){
 	int i;
 
@@ -25,35 +28,15 @@ sNode* newSNode (){
 	for (i = 0; i < 256; i++){
 		foo->links[i] = NULL;
 	}
-
-}
-
-void traverseTree(sNode * node, unsigned int depth){
-	char i;
-	unsigned int j;
-	for (i = 0; i < 256; i++){
-		if (node->links[i] != NULL){
-			for(j=0; j<=depth; j++){
-				printf("\t");
-			}
-			printf("%c\n", i);
-
-			traverseTree(node->links[i], depth++);
-
-		}
-	}
-	return;
 }
 
 void addString (stringPack val){
 	int i;
 	sNode * currentNode = &head;
-	//printf("%s\n", val.string);
 
 	for (i = 0; i < val.length; i++){
 		//If the link is already active traverses immediately
 		if (currentNode->links[val.string[i]] != NULL){
-
 			currentNode = currentNode->links[val.string[i]];
 		}
 		else{

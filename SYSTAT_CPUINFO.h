@@ -1,3 +1,5 @@
-extern void cpuInfoUpdate(struct SYSTAT_SYSTEM * sys);
+extern void cpuInfoUpdate(struct SYSTAT_CPUINFO * sys);
 
-extern void cpuInfoIntialise();
+extern void cpuInfoInitialise();
+
+extern void cpuInfoUpdateThread(struct SYSTAT_CPUINFO * sys);
